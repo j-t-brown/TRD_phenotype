@@ -10,4 +10,4 @@ Data pre-processing may look different for each dataset.
 The repository also includes an R notebook file, which I used for comparing
 model calibraition, ROC, and PR curves and decile analysis.
 The notebook file receives model predictions and dataset outcomes as input.
-Not all of the packages necessary to run each script are included in the script (sorry).
+Not all of the packages necessary to run each script are specified in the script (sorry).
