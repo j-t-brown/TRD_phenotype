@@ -1,6 +1,8 @@
 ### TRD Rotation Project ###
 # boLASSO feature selection
 
+library(glmnet)
+
 # import TRD data
 dataset<-read.csv('',header=T)
 
