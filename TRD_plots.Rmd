@@ -1,0 +1,246 @@
+---
+title: "TRD rotation plots"
+output: html_notebook
+---
+```{r}
+# attach packages
+library(rms)
+library(ROCR)
+library(PRROC)
+library(caret)
+library(MLmetrics)
+library(ggpubr)
+library(cowplot)
+library(gridExtra)
+
+# import data
+d <- read.csv("",header=T)
+
+colnames(d)[colnames(d)=="dataset.outcome"] <- "outcome"
+
+# indeces
+case <- d$outcome==1
+control <- d$outcome==0
+
+# totals
+n_case <- sum(case)
+n_control <- sum(control)
+```
+The calibration curve:
+```{r}
+val.prob(d$preds_lpre,d$outcome,statloc=F)
+val.prob(d$preds_lpost,d$outcome,statloc = F)
+val.prob(d$preds_glm100,d$outcome,statloc = F)
+val.prob(d$preds_glm_int,d$outcome,statloc = F)
+val.prob(d$preds_ridge,d$outcome,statloc = F)
+val.prob(d$preds_lasso_100,d$outcome,statloc = F)
+```
+calibration with ggplot
+```{r}
+d$outcome.f <- factor(d$outcome)
+# number of points
+cuts <- 9
+# define factored value of cases
+class <- "1"
+
+cal.pre <- calibration(outcome.f ~ preds_lpre, data=d, class = class,cuts=cuts)$data
+cal.pre$model <- rep("lasso - pre", nrow(cal.pre))
+cal.post <- calibration(outcome.f ~ preds_lpost, data=d, class = class,cuts=cuts)$data
+cal.post$model <- rep("lasso - post", nrow(cal.post))
+cal.glm100 <- calibration(outcome.f ~ preds_glm100, data=d, class = class,cuts=cuts)$data
+cal.glm100$model <- rep("glm100", nrow(cal.glm100))
+cal.glm_int <- calibration(outcome.f ~ preds_glm_int, data=d, class = class,cuts=cuts)$data
+cal.glm_int$model <- rep("glm w/ interact", nrow(cal.glm_int))
+cal.ridge100 <- calibration(outcome.f ~ preds_ridge, data=d, class = class,cuts=cuts)$data
+cal.ridge100$model <- rep("ridge100", nrow(cal.ridge100))
+cal.lasso100 <- calibration(outcome.f ~ preds_lasso_100, data=d, class = class,cuts=cuts)$data
+cal.lasso100$model <- rep("lasso100", nrow(cal.lasso100))
+# combine
+combined.cal <- rbind(cal.pre,cal.post,cal.glm100,cal.glm_int,cal.ridge100,cal.lasso100)
+# reformat values
+combined.cal$Percent <- combined.cal$Percent/100
+combined.cal$midpoint <- combined.cal$midpoint/100
+combined.cal$Lower <- combined.cal$Lower/100
+# order legend
+combined.cal$model <- factor(combined.cal$model,
+                            levels = c("lasso - pre","lasso - post", "glm100",
+                                       "glm w/ interact","ridge100","lasso100"))
+# plot
+ggplot() + xlab("Predicted probability") +
+  ylab("Actual probability") +
+  geom_line(data = combined.cal, aes(midpoint, Percent, color = model)) +
+  geom_point(data = combined.cal, aes(midpoint, Percent, color = model)) +
+  geom_line(aes(c(0, 1), c(0, 1)), linetype = 2, 
+            color = 'grey50')
+
+```
+PR with ggplot
+```{r}
+# pre
+pre <- data.frame(pr.curve(scores.class0 = d$preds_lpre[case],
+                           scores.class1 = d$preds_lpre[control], curve=T)$curve)
+pre$Model <- rep("lasso-pre", nrow(pre))
+# post
+post<- data.frame(pr.curve(scores.class0 = d$preds_lpost[case],
+                           scores.class1 = d$preds_lpost[control], curve=T)$curve)
+post$Model <- rep("lasso-post", nrow(post))
+# glm100
+glm100<- data.frame(pr.curve(scores.class0 = d$preds_glm100[case],
+                           scores.class1 = d$preds_glm100[control], curve=T)$curve)
+glm100$Model <- rep("GLM-main", nrow(glm100))
+# glm int
+glm_int <- data.frame(pr.curve(scores.class0 = d$preds_glm_int[case],
+                           scores.class1 = d$preds_glm_int[control], curve=T)$curve)
+glm_int$Model <- rep("GLM-interactions", nrow(glm_int))
+# ridge
+ridge <- data.frame(pr.curve(scores.class0 = d$preds_ridge[case],
+                           scores.class1 = d$preds_ridge[control], curve=T)$curve)
+ridge$Model <- rep("Ridge", nrow(ridge))
+# ridge
+lasso100 <- data.frame(pr.curve(scores.class0 = d$preds_lasso_100[case],
+                           scores.class1 = d$preds_lasso_100[control], curve=T)$curve)
+lasso100$Model <- rep("Lasso", nrow(lasso100))
+
+# combine data
+combined.pr <- rbind(pre,post,glm100,glm_int,ridge,lasso100)
+# order legend
+combined.pr$Model <- factor(combined.pr$Model,
+                            levels = c("lasso-pre","lasso-post", "GLM-main",
+                                       "GLM-interactions","Ridge","Lasso"))
+
+ggplot(data=combined.pr,aes(x=X1,y=X2, group=Model)) +
+  geom_line(aes(color=Model)) +
+  labs(x="Recall",y="Precision",
+       title="PR curve")
+
+```
+ROC with ggplot
+```{r}
+# pre
+pre <- data.frame(roc.curve(scores.class0 = d$preds_lpre[case],
+                           scores.class1 = d$preds_lpre[control], curve=T)$curve)
+pre$model <- rep("lasso - pre", nrow(pre))
+# post
+post<- data.frame(roc.curve(scores.class0 = d$preds_lpost[case],
+                           scores.class1 = d$preds_lpost[control], curve=T)$curve)
+post$model <- rep("lasso - post", nrow(post))
+# glm100
+glm100<- data.frame(roc.curve(scores.class0 = d$preds_glm100[case],
+                           scores.class1 = d$preds_glm100[control], curve=T)$curve)
+glm100$model <- rep("glm100", nrow(glm100))
+# glm int
+glm_int <- data.frame(roc.curve(scores.class0 = d$preds_glm_int[case],
+                           scores.class1 = d$preds_glm_int[control], curve=T)$curve)
+glm_int$model <- rep("glm w/ interact", nrow(glm_int))
+# ridge
+ridge <- data.frame(roc.curve(scores.class0 = d$preds_ridge[case],
+                           scores.class1 = d$preds_ridge[control], curve=T)$curve)
+ridge$model <- rep("ridge100", nrow(ridge))
+# ridge
+lasso100 <- data.frame(roc.curve(scores.class0 = d$preds_lasso_100[case],
+                           scores.class1 = d$preds_lasso_100[control], curve=T)$curve)
+lasso100$model <- rep("lasso100", nrow(lasso100))
+
+# combine data
+combined.roc <- rbind(pre,post,glm100,glm_int,ridge,lasso100)
+# order legend
+combined.roc$model <- factor(combined.roc$model,
+                            levels = c("lasso - pre","lasso - post", "glm100",
+                                       "glm w/ interact","ridge100","lasso100"))
+# plot
+ggplot(data=combined.roc,aes(x=X1,y=X2, group=model)) +
+  geom_line(aes(color=model)) +
+  labs(x="1 - Specificity",y="Sensitivity",
+       title="ROC")
+
+```
+Decile performance:
+```{r}
+# helper functions
+perc_cases <- function(dataframe,quant1,quant2,column){
+  tot_cases <- sum(dataframe[,"outcome"])
+  dec_cases <- sum(dataframe[which(dataframe[,column]>=quant1 & dataframe[,column]<quant2),"outcome"])
+  return(round(dec_cases/tot_cases,3))
+}
+
+gen_quantiles <- function(dataframe,column,n.quantiles){
+  q<-quantile(dataframe[,column], probs=seq(0,1,1/n.quantiles))
+  Percentage <- rep(NA,n.quantiles)
+  controls <- rep(NA,n.quantiles)
+  for (i in 1:n.quantiles){
+    Percentage[i] <- perc_cases(dataframe,q[[i]],q[[i+1]],column)
+  }
+  return(data.frame(Percentage))
+}
+
+# define number of quantiles
+num_quantiles <- 10
+Decile <- factor(seq(1,num_quantiles))
+
+# pre
+ect_pct <- gen_quantiles(d,"preds_lpre",num_quantiles)
+model <- rep("lasso - pre",num_quantiles)
+pre <- data.frame(ect_pct,Decile,model)
+
+# post
+ect_pct <- gen_quantiles(d,"preds_lpost",num_quantiles)
+model <- rep("lasso - post",num_quantiles)
+post <- data.frame(ect_pct,Decile,model)
+
+# 100 %
+ect_pct <- gen_quantiles(d,"preds_glm100",num_quantiles)
+model <- rep("glm100",num_quantiles)
+glm100 <- data.frame(ect_pct,Decile,model)
+
+# int
+ect_pct <- gen_quantiles(d,"preds_glm_int",num_quantiles)
+model <- rep("glm w/ interact",num_quantiles)
+glm_int <- data.frame(ect_pct,Decile,model)
+
+# ridge
+ect_pct <- gen_quantiles(d,"preds_ridge",num_quantiles)
+model <- rep("ridge100",num_quantiles)
+ridge100 <- data.frame(ect_pct,Decile,model)
+
+# lasso100
+ect_pct <- gen_quantiles(d,"preds_lasso_100",num_quantiles)
+model <- rep("lasso100",num_quantiles)
+lasso100 <- data.frame(ect_pct,Decile,model)
+
+# plot comparison
+combined.decile <- rbind(pre,post,glm100,glm_int,ridge100,lasso100)
+
+ggplot(combined.decile, aes(Decile, Percentage, fill=model)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    labs(title="Proportion of ECT cases per quantile")
+```
+Combined discrimination plot
+```{r}
+# PR
+pr <- ggplot(data=combined.pr,aes(x=X1,y=X2, group=Model)) +
+  geom_line(aes(color=Model)) +
+  labs(x="Recall",y="Precision",
+       title="PR") + 
+  theme(legend.direction = "horizontal", legend.title=element_blank(),
+        plot.title = element_blank(), axis.title = element_text(size=9))
+# ROC
+roc <- ggplot(data=combined.roc,aes(x=X1,y=X2, group=model)) +
+  geom_line(aes(color=model)) +
+  labs(x="1 - Specificity",y="Sensitivity",
+       title="ROC") + theme(legend.position = 'none', plot.title = element_blank(),
+                            axis.title = element_text(size=9))
+# decile
+dec <- ggplot(combined.decile, aes(Decile, Percentage, fill=model)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    labs(title="Proportion of ECT cases per decile") +
+    ylim(0,1) + theme(legend.position = "none") +
+  theme (plot.title = element_blank(), axis.title = element_text(size=9))
+
+legend <- get_legend(pr)
+
+pr <- pr + theme(legend.position = "none")
+
+grid.arrange(roc, pr, dec, legend, nrow=2, ncol=2)
+
+#ggarrange(roc,pr,dec,nrow=3,ncol=1,common.legend=T,legend="bottom")
+```
