@@ -1,6 +1,8 @@
 ### TRD Rotation Project ###
 # optimism adjustment
 
+library(glmnet)
+
 # load bolasso coefficients
 coeffs <- coeffs<-read.csv('',header=T)
 coeffs <- coeffs[2:length(coeffs)] # remove X
